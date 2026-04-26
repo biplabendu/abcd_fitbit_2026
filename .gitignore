@@ -1,0 +1,16 @@
+# History and Session Data
+.Rhistory
+.Rapp.history
+.RData
+.RDataTmp
+.Rproj.user/
+
+# Environment Variables
+.Renviron
+
+# macOS folder attributes
+**/*.DS_Store
+.DS_Store
+
+# Exclude raw data, outputs, and dev scratchpads from version control
+dev/
