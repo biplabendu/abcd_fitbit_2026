@@ -26,6 +26,13 @@ ids_sleep <- readRDS(
 # n = 2,919
 
 ids <- intersect(ids_sleep, ids_steps)
+# write.csv(
+#   data.frame(
+#     participant_id = ids
+#   ),
+#   "data/ids_fitbit_v02_v06-sleep_steps_data.csv",
+#   row.names = FALSE
+# )
 
 ## Create dataset --------------------------------------------------------
 vars <- read.csv(
