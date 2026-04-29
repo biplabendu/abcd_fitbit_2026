@@ -1,26 +1,8 @@
+# Load functions / pkgs ---------------------------------------------------
 library(dplyr)
 library(ggplot2)
 library(lubridate)
-
-# replace with your directory path
-# folder containing the pre-assembled dataset
-dir_abcd <- "dev/data/7_0/0_1/data"
-
-
-# Vars of interest --------------------------------------------------------
-vars <- read.csv(
-  "data/vars-of-interest/psychiatric_disorders-diagnosis-sim04.csv"
-) |> 
-  as_tibble()
-
-data <- NBDCtools::create_dataset_abcd(
-  dir = dir_abcd,
-  vars = vars$name,
-  vars_add = c(
-    "ab_g_dyn__design_site",
-    "ab_g_dyn__visit_age"
-  )
-)
+for (f in list.files("R", full.names = TRUE)) source(f)
 
 # Fitbit data -------------------------------------------------------------
 dat <- arrow::read_parquet(
@@ -39,7 +21,7 @@ dat <- arrow::read_parquet(
   ) 
 
 
-# Summarize data ----------------------------------------------------------
+## Summarize data ----------------------------------------------------------
 summ <- dat |> 
   group_by(
     participant_id,
@@ -84,7 +66,7 @@ summ |>
   ) +
   theme_linedraw(24)
 
-# Identify sessions of interest -----------------------------------------
+## Identify sessions of interest -----------------------------------------
 
 summ_daily <- dat |> 
   select(
@@ -142,7 +124,7 @@ summ_daily |>
   )
 
 
-# Identify IDs ------------------------------------------------------------
+## Identify IDs ------------------------------------------------------------
 ids_v02_v06 <- summ_daily |> 
   tidyr::pivot_wider(
     names_from = session_id,
@@ -162,13 +144,13 @@ ids_v02_v06 <- summ_daily |>
       `ses-06A` == "keep"
   )
 
-ids_v02_v06 |> 
-  write.csv(
-    "data/ids_fitbit_v02_v06.csv",
-    row.names = FALSE
-  )
+# ids_v02_v06 |> 
+#   write.csv(
+#     "data/ids_fitbit_v02_v06.csv",
+#     row.names = FALSE
+#   )
 
-# Subset / Format data ----------------------------------------------------
+## Subset / Format data ----------------------------------------------------
 
 sdat <- dat |> 
   select(
@@ -192,7 +174,7 @@ sdat <- dat |>
     mnth = month(dt)
   )
 
-out <- sdat |> 
+out_fitbit <- sdat |> 
   group_by(id, sess, yr, is_wknd, dt_hr) |> 
   reframe(
     mnths = paste(unique(mnth), collapse = ", "),
