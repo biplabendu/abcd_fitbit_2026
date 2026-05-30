@@ -14,3 +14,4 @@
 
 # Exclude raw data, outputs, and dev scratchpads from version control
 dev/
+ANALYSIS_PLAN.md
