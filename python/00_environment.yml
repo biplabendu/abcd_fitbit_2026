@@ -1,0 +1,19 @@
+name: wearable_phenotyping
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pandas
+  - numpy
+  - scipy
+  - scikit-learn
+  - umap-learn
+  - hdbscan
+  - tsfresh
+  - pyarrow
+  - jupyterlab
+  - ipykernel
+  - pip
+  - pip:
+      - kmedoids             # KMedoids (fallback if scikit-learn-extra unavailable)
