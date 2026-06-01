@@ -1,5 +1,0 @@
-wave_label,metric,statistic,df,p_value,confound_flag
-yr2,wear_time_fraction,36.32084008976843,2,1.297268239206932e-8,TRUE
-yr2,n_valid_days,36.74268474669064,2,1.0505757745667352e-8,TRUE
-yr6,wear_time_fraction,5.806490158323694,1,0.0159671311264194,TRUE
-yr6,n_valid_days,4.352751244100575,1,0.03694921010355204,TRUE

@@ -1,0 +1,1053 @@
+---
+title: "Biological Rhythm Extraction from Adolescent Fitbit Data"
+subtitle: "Replication of Yan & Doryab (2022) · ABCD Cohort · 3 Waves"
+author: "Biplabendu Das"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: lumen
+    fig-width: 10
+    fig-height: 5
+    embed-resources: true
+    code-fold: show
+    code-tools: true
+execute:
+  warning: false
+  message: false
+  cache: true
+---
+
+## Overview
+
+This document applies the computational framework from **Yan & Doryab (2022)** — *"Towards a Computational Framework for Automated Discovery and Modeling of Biological Rhythms from Wearable Data Streams"* (IntelliSys 2021, LNNS 296, pp. 643–661) — to the ABCD Study Fitbit cohort.
+
+The framework identifies biological rhythms in wearable sensor data through three sequential stages: (1) periodicity detection using FFT, Chi-squared periodogram, and CyHMMs; (2) change-point detection within each confirmed period using AutoNOM and Rbeast; and (3) feature extraction for longitudinal growth curve modeling.
+
+**Adaptation notes for this dataset:**
+
+- Data resolution: 2-hour slots (12 slots/day), not minute-level as in the paper
+- Signals: `steps_total`, `min_slp`, `mets` (HR excluded — unreliable for consumer Fitbit)
+- Three waves: `ses-02A` (yr2, ~age 12), `ses-04A` (yr4, ~age 14), `ses-06A` (yr6, ~age 16)
+- Cohort: 2,919 participants (ID-filtered for ≥2 weekends of data at yr2 and yr6)
+- Period consensus: ≥2 of 3 methods must agree (more lenient than paper's all-3 rule, given coarser resolution)
+- AutoNOM and Rbeast applied to full wave series (~252 time points), not per-day, due to resolution constraints
+
+---
+
+## Setup
+
+```{r setup}
+library(arrow)
+library(tidyverse)
+library(lubridate)
+library(imputeTS)
+library(reticulate)   # CyHMMs via Python
+library(Rbeast)       # change-point detection (fallback + complement)
+library(lme4)
+library(lmerTest)
+library(gt)
+library(patchwork)
+
+# ── Resolution constants (2-hr slots) ────────────────────────────────────────
+SLOT_HOURS        <- 2L           # hours per slot
+SLOTS_PER_DAY     <- 12L          # 24 hr / 2 hr
+SLOT_STARTS       <- seq(0, 22, by = 2)  # slot start hours: 0, 2, …, 22
+SLOT_MIDPOINTS    <- SLOT_STARTS + 1     # midpoint hours for cosinor: 1, 3, …, 23
+
+# ── Validity thresholds ───────────────────────────────────────────────────────
+MIN_VALID_SLOTS   <- 8L           # ≥8 of 12 slots present → valid day
+MIN_VALID_DAYS    <- 14L          # ≥14 valid days per wave → keep participant-wave
+MAX_IMPUTE_GAP    <- 3L           # max consecutive missing slots to impute
+SMA_K             <- 2L           # SMA window: ±2 slots = ±4 hr
+
+# ── Periodicity detection ─────────────────────────────────────────────────────
+PERIOD_MIN_HR     <- 12           # minimum period to test (hours)
+PERIOD_MAX_HR     <- 48           # maximum period to test (hours)
+PERIOD_STEP_HR    <- 0.5          # step size for chi-sq scan (hours)
+CHI_ALPHA         <- 0.01         # significance threshold
+PERIOD_TOL_HR     <- 4            # ±4 hr tolerance for method agreement
+TARGET_PERIOD_HR  <- 24           # expected circadian period
+
+# ── AutoNOM / change-point ────────────────────────────────────────────────────
+KMAX_RANGE        <- 3:5          # kmax values for MAPE-based selection
+MMAX              <- 3L           # max frequency components per AutoNOM segment
+
+# ── Non-parametric circadian features ────────────────────────────────────────
+M10_SLOTS         <- 5L           # 10-hr most active window (5 × 2 hr)
+L5_SLOTS          <- 3L           # 6-hr least active window (approx L5; 3 × 2 hr)
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+RAW_PARQUET  <- "dev/data/fitbit-summaries/activity_120m.parquet"
+ID_FILE      <- "data/ids_fitbit_v02_v06-sleep_steps_data.csv"
+SIGNALS      <- c("steps_total", "min_slp", "mets")
+SESSIONS     <- c("ses-02A", "ses-04A", "ses-06A")
+WAVE_LABELS  <- c("ses-02A" = "yr2", "ses-04A" = "yr4", "ses-06A" = "yr6")
+WAVE_AGES    <- c("yr2" = 12, "yr4" = 14, "yr6" = 16)
+
+# ── CyHMM Python setup ───────────────────────────────────────────────────────
+# Requires: git clone https://github.com/epierson9/cyclic_HMMs
+# Set CYHMM_PATH to the cloned repo root before rendering
+CYHMM_PATH <- Sys.getenv("CYHMM_PATH", unset = "")
+CYHMM_AVAILABLE <- nchar(CYHMM_PATH) > 0 && file.exists(CYHMM_PATH)
+```
+
+---
+
+## Stage 0: Data Summary
+
+Examine the raw parquet file before any filtering. This section is the entry point for understanding data structure, session coverage, and signal missingness.
+
+```{r data-load}
+raw <- read_parquet(RAW_PARQUET)
+```
+
+### Column schema
+
+```{r schema}
+tibble(
+  column = names(raw),
+  type   = map_chr(raw, \(x) paste(class(x), collapse = " / "))
+) |>
+  gt() |>
+  tab_header(title = "Raw parquet column schema") |>
+  cols_label(column = "Column", type = "R type")
+```
+
+### Participant and session coverage
+
+```{r coverage}
+raw |>
+  group_by(session_id) |>
+  summarise(
+    n_participants = n_distinct(participant_id),
+    n_participant_days = n_distinct(paste(participant_id, day)),
+    median_days = median(
+      (count(pick(participant_id, day), participant_id) |> pull(n)),
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) |>
+  arrange(session_id) |>
+  gt() |>
+  tab_header(title = "Participants and days per session (unfiltered)")
+```
+
+```{r days-per-participant}
+days_per_pw <- raw |>
+  filter(session_id %in% SESSIONS) |>
+  group_by(participant_id, session_id) |>
+  summarise(n_days = n_distinct(day), .groups = "drop")
+
+days_per_pw |>
+  group_by(session_id) |>
+  summarise(
+    n_participants = n(),
+    min    = min(n_days),
+    q25    = quantile(n_days, 0.25),
+    median = median(n_days),
+    q75    = quantile(n_days, 0.75),
+    max    = max(n_days),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(title = "Distribution of days per participant-wave (3 sessions)") |>
+  fmt_number(columns = where(is.numeric), decimals = 1)
+```
+
+### Signal missingness
+
+Non-wear is identified as slots where `min_total == 0` (no recorded minutes). Signal-level NA indicates true missing data on top of non-wear.
+
+```{r missingness}
+raw |>
+  filter(session_id %in% SESSIONS) |>
+  mutate(non_wear = (is.na(min_total) | min_total == 0)) |>
+  summarise(
+    across(
+      all_of(c("min_total", SIGNALS)),
+      list(
+        pct_na      = \(x) round(mean(is.na(x)) * 100, 1),
+        pct_nonwear = \(x) round(mean(is.na(x) | (exists("non_wear") & non_wear)) * 100, 1)
+      )
+    )
+  ) |>
+  pivot_longer(everything(), names_to = c("signal", ".value"), names_sep = "_pct_") |>
+  gt() |>
+  tab_header(title = "Signal missingness across all 3 sessions (%)") |>
+  cols_label(signal = "Signal", na = "% NA", nonwear = "% NA or non-wear")
+```
+
+```{r missingness-by-session}
+raw |>
+  filter(session_id %in% SESSIONS) |>
+  mutate(non_wear = (is.na(min_total) | min_total == 0)) |>
+  group_by(session_id) |>
+  summarise(
+    across(
+      all_of(SIGNALS),
+      \(x) round(mean(is.na(x)) * 100, 1),
+      .names = "{.col}_pct_na"
+    ),
+    pct_non_wear = round(mean(non_wear) * 100, 1),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(title = "Signal missingness by session (%)")
+```
+
+### Valid-day preview
+
+A day is valid if ≥8 of 12 slots have `min_total > 0` (≤ 8 hours non-wear). This mirrors the existing Python pipeline threshold.
+
+```{r valid-day-preview}
+raw |>
+  filter(session_id %in% SESSIONS) |>
+  group_by(participant_id, session_id, day) |>
+  summarise(
+    n_slots        = n(),
+    n_valid_slots  = sum(!is.na(min_total) & min_total > 0),
+    is_valid       = n_valid_slots >= MIN_VALID_SLOTS,
+    .groups = "drop"
+  ) |>
+  group_by(session_id) |>
+  summarise(
+    total_participant_days = n(),
+    pct_valid_days = round(mean(is_valid) * 100, 1),
+    median_valid_slots = median(n_valid_slots),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(title = "Day validity preview by session")
+```
+
+---
+
+## Stage 1: Preprocessing
+
+Following the paper's Stage 1 (Section 3), we: (1) apply the participant ID filter, (2) classify non-wear slots and invalid days, (3) apply SMA imputation to isolated missing values within valid days, and (4) retain only participant-waves with ≥14 valid days.
+
+```{r preprocess}
+valid_ids <- read_csv(ID_FILE, show_col_types = FALSE) |> pull(participant_id)
+
+# Apply ID and session filters; label waves
+dat <- raw |>
+  filter(
+    session_id     %in% SESSIONS,
+    participant_id %in% valid_ids
+  ) |>
+  mutate(
+    wave      = recode(session_id, !!!WAVE_LABELS),
+    slot_hour = hour(start)         # slot start hour (0, 2, 4, …, 22)
+  )
+
+n_before <- n_distinct(paste(dat$participant_id, dat$wave))
+```
+
+```{r non-wear}
+dat <- dat |>
+  mutate(non_wear = is.na(min_total) | min_total == 0)
+```
+
+```{r day-validity}
+day_validity <- dat |>
+  group_by(participant_id, wave, day) |>
+  summarise(
+    n_slots       = n(),
+    n_valid_slots = sum(!non_wear),
+    is_valid      = n_valid_slots >= MIN_VALID_SLOTS,
+    .groups = "drop"
+  )
+
+wave_validity <- day_validity |>
+  group_by(participant_id, wave) |>
+  summarise(
+    n_valid_days = sum(is_valid),
+    passes       = n_valid_days >= MIN_VALID_DAYS,
+    .groups = "drop"
+  )
+```
+
+```{r preprocess-summary}
+wave_validity |>
+  group_by(wave) |>
+  summarise(
+    n_total          = n(),
+    n_pass           = sum(passes),
+    pct_pass         = round(mean(passes) * 100, 1),
+    median_valid_days = median(n_valid_days),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(
+    title    = "Participant-wave counts after validity filtering",
+    subtitle = glue::glue("Threshold: ≥{MIN_VALID_DAYS} valid days (≥{MIN_VALID_SLOTS} slots/day)")
+  )
+```
+
+```{r filter-and-impute}
+# Keep only valid days from participant-waves that pass the threshold
+dat_valid <- dat |>
+  semi_join(day_validity  |> filter(is_valid), by = c("participant_id", "wave", "day")) |>
+  semi_join(wave_validity |> filter(passes),   by = c("participant_id", "wave"))
+
+# SMA imputation: set non-wear slots to NA, then fill short gaps within each wave
+# Imputation is applied only to valid-day slots; non-wear slots stay NA
+dat_imputed <- dat_valid |>
+  group_by(participant_id, wave) |>
+  arrange(day, slot_hour, .by_group = TRUE) |>
+  mutate(
+    steps_total = if_else(non_wear, NA_real_, steps_total),
+    min_slp     = if_else(non_wear, NA_real_, min_slp),
+    mets        = if_else(non_wear, NA_real_, mets),
+    steps_total = na_ma(steps_total, k = SMA_K, weighting = "simple"),
+    min_slp     = na_ma(min_slp,     k = SMA_K, weighting = "simple"),
+    mets        = na_ma(mets,        k = SMA_K, weighting = "simple")
+  ) |>
+  ungroup()
+```
+
+```{r imputation-summary}
+bind_rows(
+  dat_valid   |> summarise(across(all_of(SIGNALS), \(x) mean(is.na(x))), stage = "pre-imputation"),
+  dat_imputed |> summarise(across(all_of(SIGNALS), \(x) mean(is.na(x))), stage = "post-imputation")
+) |>
+  pivot_longer(all_of(SIGNALS), names_to = "signal", values_to = "pct_na") |>
+  mutate(pct_na = round(pct_na * 100, 2)) |>
+  pivot_wider(names_from = stage, values_from = pct_na) |>
+  gt() |>
+  tab_header(title = "Residual NA (%) before and after SMA imputation")
+```
+
+---
+
+## Stage 2: Periodicity Detection
+
+We apply all three methods to the concatenated wave time series for each participant × wave × signal combination, then confirm a period if ≥2 of 3 methods agree within ±4 hours of the target.
+
+**Time series structure:** For each participant-wave-signal, slots are ordered by day then by slot within day (slot_hour 0, 2, …, 22). Missing days leave gaps of 12 consecutive NAs. Each slot's time anchor in hours is `(day − 1) × 24 + slot_hour + 1` (midpoint of the 2-hr window).
+
+```{r build-wave-ts}
+build_wave_ts <- function(df_pw) {
+  # df_pw: single participant-wave after imputation, sorted by day × slot_hour
+  # Returns: ordered vector of signal values with NAs for missing-day gaps
+  df_pw |>
+    arrange(day, slot_hour) |>
+    mutate(
+      t_slot  = (day - 1L) * SLOTS_PER_DAY + (slot_hour / SLOT_HOURS) + 1L,
+      t_hours = (day - 1L) * 24 + slot_hour + SLOT_HOURS / 2
+    )
+}
+```
+
+### 2.1 Fast Fourier Transform
+
+FFT converts the signal to the frequency domain; the dominant frequency corresponds to the strongest periodic component (Section 3.1 of the paper). We detrend before applying FFT to remove slow drifts.
+
+```{r fft-function}
+run_fft <- function(x) {
+  # x: contiguous time series vector (NAs linearly interpolated before FFT)
+  x_filled <- approx(seq_along(x), x, seq_along(x))$y
+  x_filled[is.na(x_filled)] <- mean(x_filled, na.rm = TRUE)
+  x_detrend <- x_filled - predict(lm(x_filled ~ seq_along(x_filled)))
+
+  n           <- length(x_detrend)
+  fft_result  <- fft(x_detrend)
+  power       <- Mod(fft_result)^2
+  # frequency in cycles/slot
+  freq_slot   <- (seq_len(n) - 1L) / n
+  # period in hours = (1 / freq_slot) * SLOT_HOURS; exclude DC (idx=1) and mirror
+  usable      <- 2:(n %/% 2)
+  period_hrs  <- (1 / freq_slot[usable]) * SLOT_HOURS
+
+  # Restrict to plausible biological periods (PERIOD_MIN_HR to PERIOD_MAX_HR)
+  in_range    <- period_hrs >= PERIOD_MIN_HR & period_hrs <= PERIOD_MAX_HR
+  if (!any(in_range)) return(NA_real_)
+
+  dominant_idx   <- usable[in_range][which.max(power[usable][in_range])]
+  dominant_period <- (1 / freq_slot[dominant_idx]) * SLOT_HOURS
+
+  dominant_period
+}
+```
+
+### 2.2 Chi-Squared Periodogram
+
+Implements the Sokolove & Bushell Q_P statistic (Equation 1 in the paper). A period is considered significant when Q_P exceeds the chi-squared critical value with P−1 degrees of freedom at α = 0.01.
+
+```{r chi-sq-function}
+chi_sq_periodogram <- function(x) {
+  # x: time series vector; NAs dropped (robust to irregular spacing)
+  x_clean <- x[!is.na(x)]
+  N       <- length(x_clean)
+  M       <- mean(x_clean)
+  denom   <- sum((x_clean - M)^2)
+  if (denom == 0 || N < 2) return(NULL)
+
+  periods_hr <- seq(PERIOD_MIN_HR, PERIOD_MAX_HR, by = PERIOD_STEP_HR)
+  # Convert period in hours to period in slots (must be integer for segmenting)
+  periods_sl <- round(periods_hr / SLOT_HOURS)
+
+  qp_vals <- map_dbl(periods_sl, function(P_int) {
+    K <- floor(N / P_int)
+    if (K < 2) return(NA_real_)
+    # Mh: mean of each within-period time unit across K full cycles
+    x_mat <- matrix(x_clean[1:(K * P_int)], nrow = P_int, ncol = K)
+    Mh    <- rowMeans(x_mat, na.rm = TRUE)
+    (K * N * sum((Mh - M)^2)) / denom
+  })
+
+  # Significance: QP > chi-sq critical value with (P_int - 1) df
+  sig_thresh <- qchisq(1 - CHI_ALPHA, df = pmax(periods_sl - 1L, 1L))
+  is_sig     <- !is.na(qp_vals) & qp_vals > sig_thresh
+
+  if (!any(is_sig)) {
+    return(list(detected_period = NA_real_, qp_at_24hr = NA_real_, any_sig = FALSE))
+  }
+
+  # Return the significant period closest to 24 hours
+  sig_periods <- periods_hr[is_sig]
+  closest_idx <- which.min(abs(sig_periods - TARGET_PERIOD_HR))
+
+  # Also record Q_P at the 24-hr period (rhythm strength)
+  idx_24 <- which.min(abs(periods_hr - TARGET_PERIOD_HR))
+  list(
+    detected_period = sig_periods[closest_idx],
+    qp_at_24hr      = qp_vals[idx_24],
+    any_sig         = TRUE
+  )
+}
+```
+
+### 2.3 Cyclic Hidden Markov Models (CyHMMs)
+
+CyHMMs infer cyclic latent states whose count equals the period length (Section 3.1). Unlike standard HMMs, transitions are constrained to follow a fixed cyclic order and dwell times follow a Poisson distribution. We use the Pierson et al. (2018) Python implementation via `reticulate`.
+
+**Setup:** Clone https://github.com/epierson9/cyclic_HMMs and set the environment variable `CYHMM_PATH` to the repo root before rendering. Check the repo's API for exact function signatures — the wrapper below assumes `fit_cyhmm(data, n_states)` returns log-likelihood.
+
+```{r cyhmm-setup, eval=CYHMM_AVAILABLE}
+use_python(Sys.which("python3"), required = FALSE)
+if (CYHMM_AVAILABLE) {
+  reticulate::source_python(file.path(CYHMM_PATH, "cy_hmm.py"))
+}
+```
+
+```{r cyhmm-function}
+run_cyhmm <- function(x, min_states = round(PERIOD_MIN_HR / SLOT_HOURS),
+                          max_states = round(PERIOD_MAX_HR / SLOT_HOURS)) {
+  # At 2-hr resolution: min_states=6 (12 hr), max_states=24 (48 hr)
+  x_clean <- x[!is.na(x)]
+  if (length(x_clean) < max_states * 2) return(NA_real_)
+
+  if (!CYHMM_AVAILABLE) {
+    # Fallback: depmixS4 approximate cyclic HMM
+    # Returns the period (in hours) with lowest BIC
+    suppressPackageStartupMessages(library(depmixS4))
+    bic_vals <- map_dbl(seq(min_states, max_states), function(ns) {
+      tryCatch({
+        mod <- depmix(
+          response = list(x_clean ~ 1),
+          data     = data.frame(x_clean),
+          nstates  = ns,
+          family   = list(gaussian())
+        )
+        fit <- fit(mod, verbose = FALSE)
+        BIC(fit)
+      }, error = function(e) NA_real_)
+    })
+    best_states <- seq(min_states, max_states)[which.min(bic_vals)]
+    return(best_states * SLOT_HOURS)
+  }
+
+  # Python CyHMM via reticulate
+  # Adjust function name to match actual API in epierson9/cyclic_HMMs
+  n_states_range <- seq(min_states, max_states)
+  ll_vals <- map_dbl(n_states_range, function(ns) {
+    tryCatch(
+      py$fit_cyhmm(r_to_py(x_clean), as.integer(ns)),
+      error = function(e) NA_real_
+    )
+  })
+  best_states <- n_states_range[which.max(ll_vals)]
+  best_states * SLOT_HOURS  # return period in hours
+}
+```
+
+### 2.4 Period Confirmation
+
+A period is confirmed if ≥2 of the 3 methods detect a period within ±`PERIOD_TOL_HR` hours of each other.
+
+```{r confirm-period}
+confirm_period <- function(fft_period, chi_period, cyhmm_period,
+                           tol = PERIOD_TOL_HR) {
+  methods <- c(fft = fft_period, chi = chi_period, cyhmm = cyhmm_period)
+  valid   <- methods[!is.na(methods)]
+  if (length(valid) < 2) return(NA_real_)
+
+  # Check pairwise agreement
+  pairs <- combn(names(valid), 2, simplify = FALSE)
+  agrees <- map_lgl(pairs, \(p) abs(valid[p[1]] - valid[p[2]]) <= tol)
+
+  if (!any(agrees)) return(NA_real_)
+
+  # Return the mean of the agreeing pair(s) closest to 24 hr
+  agreeing_vals <- unique(unlist(map(
+    pairs[agrees], \(p) valid[p]
+  )))
+  mean(agreeing_vals)
+}
+```
+
+### Apply periodicity detection
+
+```{r apply-periodicity}
+# Nest data per participant × wave × signal, then apply all three methods
+ts_nested <- dat_imputed |>
+  select(participant_id, wave, day, slot_hour, all_of(SIGNALS)) |>
+  pivot_longer(all_of(SIGNALS), names_to = "signal", values_to = "value") |>
+  group_by(participant_id, wave, signal) |>
+  arrange(day, slot_hour, .by_group = TRUE) |>
+  nest() |>
+  ungroup()
+
+periodicity_results <- ts_nested |>
+  mutate(
+    ts_vec       = map(data, \(d) d$value),
+    fft_period   = map_dbl(ts_vec, run_fft),
+    chi_result   = map(ts_vec, chi_sq_periodogram),
+    chi_period   = map_dbl(chi_result, \(r) if (is.null(r)) NA_real_ else r$detected_period),
+    qp_at_24hr   = map_dbl(chi_result, \(r) if (is.null(r)) NA_real_ else r$qp_at_24hr),
+    cyhmm_period = map_dbl(ts_vec, run_cyhmm),
+    confirmed_period = pmap_dbl(
+      list(fft_period, chi_period, cyhmm_period),
+      confirm_period
+    ),
+    is_circadian = !is.na(confirmed_period) &
+                   abs(confirmed_period - TARGET_PERIOD_HR) <= PERIOD_TOL_HR
+  ) |>
+  select(-data, -ts_vec, -chi_result)
+```
+
+```{r periodicity-summary}
+periodicity_results |>
+  group_by(wave, signal) |>
+  summarise(
+    n                  = n(),
+    pct_fft_detected   = round(mean(!is.na(fft_period) &
+                                    abs(fft_period - TARGET_PERIOD_HR) <= PERIOD_TOL_HR) * 100, 1),
+    pct_chi_detected   = round(mean(!is.na(chi_period) &
+                                    abs(chi_period - TARGET_PERIOD_HR) <= PERIOD_TOL_HR) * 100, 1),
+    pct_cyhmm_detected = round(mean(!is.na(cyhmm_period) &
+                                    abs(cyhmm_period - TARGET_PERIOD_HR) <= PERIOD_TOL_HR) * 100, 1),
+    pct_confirmed      = round(mean(is_circadian) * 100, 1),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(
+    title    = "Periodicity detection results",
+    subtitle = "% of participant-waves with 24-hr period detected (within ±4 hr)"
+  ) |>
+  cols_label(
+    wave = "Wave", signal = "Signal", n = "N",
+    pct_fft_detected = "FFT (%)", pct_chi_detected = "Chi-sq (%)",
+    pct_cyhmm_detected = "CyHMM (%)", pct_confirmed = "Confirmed (%)"
+  )
+```
+
+```{r periodicity-plot}
+periodicity_results |>
+  filter(!is.na(confirmed_period)) |>
+  ggplot(aes(x = confirmed_period, fill = signal)) +
+  geom_histogram(bins = 30, position = "identity", alpha = 0.6) +
+  geom_vline(xintercept = 24, linetype = "dashed", colour = "black") +
+  facet_grid(wave ~ signal) +
+  labs(
+    x = "Confirmed period (hours)",
+    y = "N participant-waves",
+    title = "Distribution of confirmed periods by wave and signal"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+---
+
+## Stage 3: Change-Point Detection
+
+Following the paper's Stage 2 (Section 3.2), we use AutoNOM to identify change points by detecting frequency shifts in the time series. At 2-hr resolution, we apply AutoNOM and Rbeast to the **full wave time series** (~252 time points) rather than per-day (which would have only 12 points — insufficient for frequency analysis). Missing days are represented as NA gaps; Rbeast handles these natively. AutoNOM receives a linearly interpolated series over missing days (short gaps only: ≤3 consecutive missing days).
+
+We restrict change-point analysis to participant-waves with a confirmed 24-hr period.
+
+### 3.1 AutoNOM
+
+AutoNOM (Hadj-Amar et al., 2019) fits non-stationary sinusoidal segments via reversible-jump MCMC. `kmax` is selected using the MAPE elbow method (Table 4 in the paper).
+
+**Installation:** `devtools::install_github("hadjamar/BayesSpec")`
+
+```{r autonOM-function}
+run_autonOM <- function(x, kmax_range = KMAX_RANGE, mmax = MMAX) {
+  # Linearly interpolate short gaps (≤ 3 × SLOTS_PER_DAY missing slots)
+  n_consec_na <- rle(is.na(x))
+  max_gap     <- max(n_consec_na$lengths[n_consec_na$values], default = 0L)
+
+  x_interp <- if (max_gap <= 3L * SLOTS_PER_DAY) {
+    approx(seq_along(x), x, seq_along(x))$y
+  } else {
+    x  # leave long gaps; AutoNOM may struggle — Rbeast preferred in this case
+  }
+  x_interp[is.na(x_interp)] <- mean(x_interp, na.rm = TRUE)
+
+  if (!requireNamespace("BayesSpec", quietly = TRUE)) {
+    warning("BayesSpec not installed; skipping AutoNOM. Install with: devtools::install_github('hadjamar/BayesSpec')")
+    return(list(changepoints = integer(0), fitted = rep(NA_real_, length(x)), kmax_used = NA_integer_, mape = NA_real_))
+  }
+
+  # MAPE-based kmax selection (Section 3 / Table 4 of paper)
+  mape_vals <- map_dbl(kmax_range, function(k) {
+    tryCatch({
+      res <- BayesSpec::autnom(y = x_interp, kmax = k, mmax = mmax)
+      mean(abs((res$fitted - x_interp) / (x_interp + 1e-8))) * 100
+    }, error = function(e) NA_real_)
+  })
+
+  # Elbow: largest drop in MAPE as k increases
+  if (all(is.na(mape_vals))) {
+    return(list(changepoints = integer(0), fitted = rep(NA_real_, length(x)), kmax_used = NA_integer_, mape = NA_real_))
+  }
+
+  diffs     <- diff(mape_vals)
+  best_k    <- kmax_range[which.min(diffs) + 1L]
+  best_res  <- BayesSpec::autnom(y = x_interp, kmax = best_k, mmax = mmax)
+
+  list(
+    changepoints = best_res$changepoints,
+    fitted       = best_res$fitted,
+    kmax_used    = best_k,
+    mape         = min(mape_vals, na.rm = TRUE)
+  )
+}
+```
+
+### 3.2 Rbeast
+
+Rbeast decomposes the time series into trend and seasonal components and estimates change-point probabilities. It handles irregular/missing data natively and is used as both a complement to AutoNOM and a fallback when AutoNOM is unavailable.
+
+```{r rbeast-function}
+run_rbeast <- function(x) {
+  # period = 12 slots (24-hr circadian period at 2-hr resolution)
+  tryCatch({
+    result <- beast(
+      x,
+      season    = "harmonic",
+      period    = SLOTS_PER_DAY,   # 12 slots = 24 hours
+      hasNA     = TRUE,
+      quiet     = TRUE
+    )
+    # Change points where posterior probability > 0.5
+    cp_idx <- which(result$trend$cpPr > 0.5)
+    list(
+      changepoints    = cp_idx,
+      cp_prob         = result$trend$cpPr,
+      trend_fitted    = result$trend$Y,
+      seasonal_fitted = result$season$Y
+    )
+  }, error = function(e) {
+    list(changepoints = integer(0), cp_prob = NA, trend_fitted = NA, seasonal_fitted = NA)
+  })
+}
+```
+
+### Apply change-point detection
+
+```{r apply-changepoint}
+# Restrict to confirmed 24-hr period participant-waves
+pw_confirmed <- periodicity_results |>
+  filter(is_circadian) |>
+  select(participant_id, wave, signal)
+
+cp_input <- ts_nested |>
+  semi_join(pw_confirmed, by = c("participant_id", "wave", "signal")) |>
+  mutate(ts_vec = map(data, \(d) d$value))
+
+cp_results <- cp_input |>
+  mutate(
+    autonOM  = map(ts_vec, run_autonOM),
+    rbeast   = map(ts_vec, run_rbeast),
+    cp_autonOM  = map(autonOM, \(r) r$changepoints),
+    cp_rbeast   = map(rbeast,  \(r) r$changepoints),
+    n_cp_autonOM = map_int(cp_autonOM, length),
+    n_cp_rbeast  = map_int(cp_rbeast,  length),
+    kmax_used    = map_int(autonOM, \(r) if (is.na(r$kmax_used)) NA_integer_ else r$kmax_used)
+  ) |>
+  select(-data, -ts_vec, -autonOM, -rbeast)
+```
+
+```{r changepoint-summary}
+cp_results |>
+  group_by(wave, signal) |>
+  summarise(
+    n                      = n(),
+    median_cp_autonOM      = median(n_cp_autonOM, na.rm = TRUE),
+    median_cp_rbeast       = median(n_cp_rbeast,  na.rm = TRUE),
+    pct_zero_cp_autonOM    = round(mean(n_cp_autonOM == 0) * 100, 1),
+    pct_zero_cp_rbeast     = round(mean(n_cp_rbeast  == 0) * 100, 1),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(
+    title    = "Change-point detection summary",
+    subtitle = "Applied to full wave time series (~252 time points); restricted to confirmed 24-hr participants"
+  )
+```
+
+```{r changepoint-plot}
+cp_results |>
+  select(participant_id, wave, signal, n_cp_autonOM, n_cp_rbeast) |>
+  pivot_longer(starts_with("n_cp"), names_to = "method", values_to = "n_cp",
+               names_prefix = "n_cp_") |>
+  ggplot(aes(x = n_cp, fill = method)) +
+  geom_bar(position = "dodge") +
+  facet_grid(wave ~ signal) +
+  labs(x = "Number of change points", y = "N participant-waves",
+       title = "Distribution of change-point counts per participant-wave") +
+  theme_minimal()
+```
+
+---
+
+## Stage 4: Feature Extraction
+
+For each participant × wave × signal with a confirmed 24-hr period, we extract:
+
+1. **Cosinor parameters** — MESOR, amplitude, acrophase (via linearized least-squares)
+2. **Rhythm strength** — Q_P at 24 hr from the chi-squared periodogram
+3. **Non-parametric circadian features** — IS (interdaily stability), IV (intradaily variability), RA (relative amplitude)
+4. **Change-point features** — mean number of change points per wave (AutoNOM and Rbeast), SD of change-point timing
+
+```{r cosinor-function}
+fit_cosinor <- function(x, t_hours) {
+  # Linearized cosinor: y = a + b*cos(2π*t/24) + c*sin(2π*t/24)
+  # MESOR = a, amplitude = sqrt(b²+c²), acrophase = atan2(-c, b) mapped to [0,24)
+  df <- data.frame(
+    y    = x,
+    t    = t_hours,
+    cosx = cos(2 * pi * t_hours / TARGET_PERIOD_HR),
+    sinx = sin(2 * pi * t_hours / TARGET_PERIOD_HR)
+  ) |> filter(!is.na(y))
+
+  if (nrow(df) < 3) return(rep(NA_real_, 3) |> setNames(c("mesor", "amplitude", "acrophase")))
+
+  fit <- tryCatch(
+    lm(y ~ cosx + sinx, data = df),
+    error = function(e) NULL
+  )
+  if (is.null(fit)) return(rep(NA_real_, 3) |> setNames(c("mesor", "amplitude", "acrophase")))
+
+  b   <- coef(fit)[["cosx"]]
+  cc  <- coef(fit)[["sinx"]]
+  amp <- sqrt(b^2 + cc^2)
+  aph <- (atan2(-cc, b) * 24 / (2 * pi)) %% 24  # convert to hours [0,24)
+
+  c(mesor = unname(coef(fit)[["(Intercept)"]]), amplitude = amp, acrophase = aph)
+}
+```
+
+```{r nonparam-circadian-functions}
+# IS: interdaily stability — consistency of 24-hr pattern across days
+# IV: intradaily variability — within-day fragmentation
+# RA: relative amplitude = (M10 - L5) / (M10 + L5)
+
+calc_is_iv <- function(x, n_slots_per_day = SLOTS_PER_DAY) {
+  x_clean <- x[!is.na(x)]
+  N <- length(x_clean)
+  if (N < n_slots_per_day) return(c(IS = NA_real_, IV = NA_real_))
+
+  M   <- mean(x_clean)
+  var_total <- sum((x_clean - M)^2)
+  if (var_total == 0) return(c(IS = NA_real_, IV = NA_real_))
+
+  # IS: mean value at each within-period slot position
+  slot_idx <- ((seq_along(x_clean) - 1L) %% n_slots_per_day) + 1L
+  Mh  <- tapply(x_clean, slot_idx, mean)
+  IS  <- N * sum((Mh - M)^2) / (n_slots_per_day * var_total)
+
+  # IV: successive differences (only within valid stretches, not across NA gaps)
+  diffs <- diff(x_clean)
+  IV <- N * sum(diffs^2) / ((N - 1L) * var_total)
+
+  c(IS = IS, IV = IV)
+}
+
+calc_ra <- function(x) {
+  x_clean <- x[!is.na(x)]
+  if (length(x_clean) < M10_SLOTS + L5_SLOTS) return(c(M10 = NA_real_, L5 = NA_real_, RA = NA_real_))
+
+  # Rolling window sums (slot-level, across the full wave)
+  roll_sum <- function(v, w) filter(v, rep(1 / w, w), sides = 1)
+
+  m10_vals <- roll_sum(x_clean, M10_SLOTS)
+  l5_vals  <- roll_sum(x_clean, L5_SLOTS)
+
+  M10 <- max(m10_vals, na.rm = TRUE)
+  L5  <- min(l5_vals,  na.rm = TRUE)
+  RA  <- if (M10 + L5 == 0) NA_real_ else (M10 - L5) / (M10 + L5)
+
+  c(M10 = M10, L5 = L5, RA = RA)
+}
+```
+
+```{r extract-features}
+# Build the time axis (hours) for each participant-wave
+ts_with_time <- ts_nested |>
+  semi_join(pw_confirmed, by = c("participant_id", "wave", "signal")) |>
+  mutate(
+    t_hours = map(data, \(d) (d$day - 1L) * 24 + d$slot_hour + SLOT_HOURS / 2),
+    ts_vec  = map(data, \(d) d$value)
+  )
+
+cosinor_features <- ts_with_time |>
+  mutate(
+    cosinor = map2(ts_vec, t_hours, fit_cosinor),
+    mesor      = map_dbl(cosinor, "mesor"),
+    amplitude  = map_dbl(cosinor, "amplitude"),
+    acrophase  = map_dbl(cosinor, "acrophase")
+  ) |>
+  select(participant_id, wave, signal, mesor, amplitude, acrophase)
+
+nonparam_features <- ts_with_time |>
+  mutate(
+    is_iv = map(ts_vec, calc_is_iv),
+    ra    = map(ts_vec, calc_ra),
+    IS    = map_dbl(is_iv, "IS"),
+    IV    = map_dbl(is_iv, "IV"),
+    M10   = map_dbl(ra, "M10"),
+    L5    = map_dbl(ra, "L5"),
+    RA    = map_dbl(ra, "RA")
+  ) |>
+  select(participant_id, wave, signal, IS, IV, M10, L5, RA)
+
+cp_features <- cp_results |>
+  mutate(
+    cp_timing_sd_autonOM = map_dbl(cp_autonOM, \(cp) if (length(cp) < 2) NA_real_ else sd(cp)),
+    cp_timing_sd_rbeast  = map_dbl(cp_rbeast,  \(cp) if (length(cp) < 2) NA_real_ else sd(cp))
+  ) |>
+  select(participant_id, wave, signal,
+         n_cp_autonOM, n_cp_rbeast,
+         cp_timing_sd_autonOM, cp_timing_sd_rbeast)
+
+# Rhythm strength from chi-sq
+rhythm_strength <- periodicity_results |>
+  filter(is_circadian) |>
+  select(participant_id, wave, signal, qp_at_24hr)
+
+# Master feature table (one row per participant × wave × signal)
+features <- cosinor_features |>
+  left_join(nonparam_features, by = c("participant_id", "wave", "signal")) |>
+  left_join(cp_features,       by = c("participant_id", "wave", "signal")) |>
+  left_join(rhythm_strength,   by = c("participant_id", "wave", "signal")) |>
+  left_join(
+    periodicity_results |> select(participant_id, wave, signal, confirmed_period, is_circadian),
+    by = c("participant_id", "wave", "signal")
+  ) |>
+  mutate(arrhythmic = !is_circadian)
+```
+
+```{r feature-summary}
+features |>
+  group_by(wave, signal) |>
+  summarise(
+    n             = sum(!arrhythmic),
+    pct_arrhythmic = round(mean(arrhythmic) * 100, 1),
+    across(
+      c(mesor, amplitude, acrophase, IS, IV, RA, qp_at_24hr),
+      \(x) round(median(x, na.rm = TRUE), 2),
+      .names = "med_{.col}"
+    ),
+    .groups = "drop"
+  ) |>
+  gt() |>
+  tab_header(title = "Feature summary by wave and signal (medians)") |>
+  tab_spanner(label = "Cosinor", columns = starts_with("med_m") | starts_with("med_am") | starts_with("med_ac")) |>
+  tab_spanner(label = "Non-parametric", columns = c(med_IS, med_IV, med_RA)) |>
+  tab_spanner(label = "Rhythm strength", columns = med_qp_at_24hr)
+```
+
+```{r acrophase-plot}
+features |>
+  filter(!is.na(acrophase), !arrhythmic) |>
+  ggplot(aes(x = acrophase, fill = wave)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~signal) +
+  scale_x_continuous(breaks = seq(0, 24, 4), limits = c(0, 24)) +
+  geom_vline(xintercept = c(6, 18), linetype = "dotted") +
+  labs(x = "Acrophase (hour of peak, 24-hr clock)",
+       y = "Density",
+       title = "Distribution of acrophase by wave and signal") +
+  theme_minimal()
+```
+
+---
+
+## Stage 5: Longitudinal Modeling
+
+Growth curve models (Bates et al., 2015; `lme4`) test whether rhythm features change across adolescence and whether trajectories differ by sex. The approximate ages at each wave are 12 (yr2), 14 (yr4), 16 (yr6). Participant random intercepts and slopes account for individual differences.
+
+```{r longitudinal-setup}
+# Wide-to-long feature table; join approximate age and load demographics if available
+features_long <- features |>
+  mutate(
+    age        = WAVE_AGES[wave],
+    age_c      = age - 12,      # center at age 12
+    age_c_sq   = age_c^2
+  )
+
+# Uncomment and adapt if a demographics file with sex/puberty is available:
+# demo <- read_csv("data/vars-of-interest/demographics.csv")
+# features_long <- features_long |> left_join(demo, by = "participant_id")
+```
+
+### 5.1 Circadian phase (acrophase)
+
+Does the timing of peak activity delay across adolescence? Fits a linear trajectory; a positive slope indicates later acrophase with age (circadian phase delay).
+
+```{r model-acrophase}
+model_results <- features_long |>
+  filter(!is.na(acrophase), !arrhythmic) |>
+  group_by(signal) |>
+  group_map(function(df, key) {
+    tryCatch({
+      m <- lmer(acrophase ~ age_c + (1 + age_c | participant_id), data = df,
+                REML = FALSE, control = lmerControl(optimizer = "bobyqa"))
+      broom.mixed::tidy(m, effects = "fixed") |> mutate(signal = key$signal)
+    }, error = function(e) NULL)
+  }) |>
+  bind_rows()
+
+model_results |>
+  filter(term != "(Intercept)") |>
+  select(signal, term, estimate, std.error, statistic, p.value) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  gt() |>
+  tab_header(title = "Acrophase ~ age (fixed effects)",
+             subtitle = "Random intercept + slope by participant; age centered at 12")
+```
+
+### 5.2 Rhythm amplitude
+
+Does the peak-to-trough contrast in activity change across adolescence?
+
+```{r model-amplitude}
+features_long |>
+  filter(!is.na(amplitude), !arrhythmic) |>
+  group_by(signal) |>
+  group_map(function(df, key) {
+    tryCatch({
+      m <- lmer(amplitude ~ age_c + (1 + age_c | participant_id), data = df,
+                REML = FALSE, control = lmerControl(optimizer = "bobyqa"))
+      broom.mixed::tidy(m, effects = "fixed") |> mutate(signal = key$signal)
+    }, error = function(e) NULL)
+  }) |>
+  bind_rows() |>
+  filter(term != "(Intercept)") |>
+  select(signal, term, estimate, std.error, statistic, p.value) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  gt() |>
+  tab_header(title = "Amplitude ~ age (fixed effects)")
+```
+
+### 5.3 Rhythm strength (Q_P)
+
+Does the regularity/strength of the circadian rhythm change with age?
+
+```{r model-strength}
+features_long |>
+  filter(!is.na(qp_at_24hr), !arrhythmic) |>
+  group_by(signal) |>
+  group_map(function(df, key) {
+    tryCatch({
+      m <- lmer(qp_at_24hr ~ age_c + (1 + age_c | participant_id), data = df,
+                REML = FALSE, control = lmerControl(optimizer = "bobyqa"))
+      broom.mixed::tidy(m, effects = "fixed") |> mutate(signal = key$signal)
+    }, error = function(e) NULL)
+  }) |>
+  bind_rows() |>
+  filter(term != "(Intercept)") |>
+  select(signal, term, estimate, std.error, statistic, p.value) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  gt() |>
+  tab_header(title = "Rhythm strength (QP at 24 hr) ~ age (fixed effects)")
+```
+
+### 5.4 Interdaily stability and intradaily variability
+
+```{r model-is-iv}
+bind_rows(
+  features_long |> filter(!is.na(IS)) |>
+    group_by(signal) |>
+    group_map(function(df, key) {
+      tryCatch({
+        m <- lmer(IS ~ age_c + (1 + age_c | participant_id), data = df,
+                  REML = FALSE, control = lmerControl(optimizer = "bobyqa"))
+        broom.mixed::tidy(m, effects = "fixed") |>
+          mutate(signal = key$signal, outcome = "IS")
+      }, error = function(e) NULL)
+    }) |> bind_rows(),
+  features_long |> filter(!is.na(IV)) |>
+    group_by(signal) |>
+    group_map(function(df, key) {
+      tryCatch({
+        m <- lmer(IV ~ age_c + (1 + age_c | participant_id), data = df,
+                  REML = FALSE, control = lmerControl(optimizer = "bobyqa"))
+        broom.mixed::tidy(m, effects = "fixed") |>
+          mutate(signal = key$signal, outcome = "IV")
+      }, error = function(e) NULL)
+    }) |> bind_rows()
+) |>
+  filter(term != "(Intercept)") |>
+  select(outcome, signal, term, estimate, std.error, statistic, p.value) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  gt() |>
+  tab_header(title = "IS and IV ~ age (fixed effects)")
+```
+
+### 5.5 Arrhythmia persistence
+
+Are participants who lack a confirmed 24-hr rhythm at yr2 more likely to remain arrhythmic at later waves?
+
+```{r model-arrhythmia}
+arrhythmic_wide <- features |>
+  select(participant_id, wave, signal, arrhythmic) |>
+  pivot_wider(names_from = wave, values_from = arrhythmic,
+              names_prefix = "arrhythmic_")
+
+# GLMM: arrhythmia at yr6 ~ arrhythmia at yr2 + signal (per signal)
+arrhythmic_glmm <- features_long |>
+  filter(!is.na(arrhythmic)) |>
+  group_by(signal) |>
+  group_map(function(df, key) {
+    tryCatch({
+      m <- glmer(arrhythmic ~ age_c + (1 | participant_id),
+                 data = df, family = binomial,
+                 control = glmerControl(optimizer = "bobyqa"))
+      broom.mixed::tidy(m, effects = "fixed") |> mutate(signal = key$signal)
+    }, error = function(e) NULL)
+  }) |>
+  bind_rows()
+
+arrhythmic_glmm |>
+  filter(term != "(Intercept)") |>
+  select(signal, term, estimate, std.error, statistic, p.value) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  gt() |>
+  tab_header(title = "Arrhythmia (binary) ~ age — GLMM (binomial)",
+             subtitle = "Positive estimate = higher odds of being arrhythmic with age")
+```
+
+---
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```
