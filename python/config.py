@@ -13,6 +13,61 @@ SESSION_LABELS = {
 }
 
 # ---------------------------------------------------------------------------
+# Participant filter
+# Restrict the pipeline to a fixed set of participant IDs (e.g. the curated
+# sleep+steps cohort). Set APPLY_ID_FILTER = False to run on all participants.
+# ---------------------------------------------------------------------------
+APPLY_ID_FILTER  = True
+ID_FILTER_FILE   = Path(__file__).parent.parent / "data" / "ids_fitbit_v02_v06-sleep_steps_data.csv"
+ID_FILTER_COLUMN = "participant_id"
+
+# ---------------------------------------------------------------------------
+# Signals to run the pipeline on
+# ---------------------------------------------------------------------------
+# Each entry maps a source-parquet column to its processing metadata:
+#   kind            : "activity" or "sleep" — controls which feature families apply
+#   clip_min/clip_max : hard artifact bounds; values outside are set to NaN
+#                       (clip_max = None means no upper bound)
+#   spike_sd        : within participant-day spike threshold in SDs (activity only;
+#                     omit or None to skip spike removal)
+#   mvpa_threshold  : per-slot value at/above which a daytime slot counts as MVPA
+#                     (activity only; omit to skip sedentary/MVPA fractions)
+#
+# NOTE: hrate_rest_fitb is intentionally excluded — the resting-HR value is not
+#       reliable. METs and intensity categories are HR-derived for QC but are
+#       valid activity measures and may be used.
+#
+# To change which signals are processed, edit this dict. Downstream scripts
+# iterate over SIGNALS automatically.
+# ---------------------------------------------------------------------------
+SIGNALS = {
+    "steps_total": {
+        "kind": "activity",
+        "clip_min": 0,
+        "clip_max": None,
+        "spike_sd": 5,
+        "mvpa_threshold": 100,    # steps per 2-hr slot
+    },
+    "min_slp": {
+        "kind": "sleep",
+        "clip_min": 0,
+        "clip_max": 120,          # minutes per 2-hr slot
+        "spike_sd": None,
+    },
+    "mets": {
+        "kind": "activity",
+        "clip_min": 0,            # clip small negative artifacts to NaN below 0
+        "clip_max": None,
+        "spike_sd": 5,
+        "mvpa_threshold": 3.0,    # METs >= 3 = moderate+ activity
+    },
+}
+
+SIGNAL_NAMES   = list(SIGNALS.keys())
+ACTIVITY_SIGNALS = [s for s, m in SIGNALS.items() if m["kind"] == "activity"]
+SLEEP_SIGNALS    = [s for s, m in SIGNALS.items() if m["kind"] == "sleep"]
+
+# ---------------------------------------------------------------------------
 # Paths (all relative to project root)
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).parent.parent
@@ -36,9 +91,6 @@ COL_SESSION = "session_id"
 COL_DAY     = "day"
 COL_START   = "start"
 COL_WKND    = "dt_wknd"
-COL_HR      = "hrate_rest_fitb"
-COL_SLEEP   = "min_slp"
-COL_STEPS   = "steps_total"
 
 # ---------------------------------------------------------------------------
 # Time structure
@@ -49,13 +101,17 @@ NIGHTTIME_HOURS = {22, 0, 2, 4}        # 10 pm – 6 am  (4 slots = 8 h)
 DAYTIME_HOURS   = {6, 8, 10, 12, 14, 16, 18, 20}  # 6 am – 10 pm
 
 # ---------------------------------------------------------------------------
-# Artifact removal thresholds
+# Day validity / wear
+# A slot counts as "present" (device worn) when VALIDITY_SIGNAL > VALIDITY_MIN_VALUE.
+# min_total = recorded minutes in the slot — the natural non-wear indicator.
 # ---------------------------------------------------------------------------
-HR_MIN          = 40    # bpm
-HR_MAX          = 200   # bpm
-STEPS_SPIKE_SD  = 5     # SD multiplier for within-participant-day spike detection
-SLEEP_MIN       = 0     # min_slp lower bound (minutes per 2-hr slot)
-SLEEP_MAX       = 120   # min_slp upper bound
+VALIDITY_SIGNAL     = "min_total"
+VALIDITY_MIN_VALUE  = 0      # min_total > 0 → slot was recorded
+
+MIN_PRESENT_SLOTS_PER_DAY = 8   # of 12 total slots
+MIN_VALID_DAYS            = 14  # of up to 21 days per wave
+MIN_VALID_WEEKDAYS        = 8   # of up to 15 weekdays
+MIN_VALID_WEEKEND_DAYS    = 4   # of up to 6 weekend days
 
 # ---------------------------------------------------------------------------
 # Imputation
@@ -65,17 +121,8 @@ MIN_NEIGHBOR_COUNT   = 3   # min valid same-hour neighbours required
 NEIGHBOR_WINDOW_DAYS = 3   # ±days for same-time-of-day lookup
 
 # ---------------------------------------------------------------------------
-# Day validity
-# ---------------------------------------------------------------------------
-MIN_HR_SLOTS_PER_DAY    = 8   # of 12 total slots
-MIN_VALID_DAYS          = 14  # of up to 21 days per wave
-MIN_VALID_WEEKDAYS      = 8   # of up to 15 weekdays
-MIN_VALID_WEEKEND_DAYS  = 4   # of up to 6 weekend days
-
-# ---------------------------------------------------------------------------
 # Feature extraction
 # ---------------------------------------------------------------------------
-MVPA_STEPS_THRESHOLD = 100   # steps per 2-hr slot to count as MVPA
 L5_SLOTS  = 3                # window for L5  (~6 h at 2-hr resolution)
 M10_SLOTS = 5                # window for M10 (10 h)
 

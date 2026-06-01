@@ -1,9 +1,9 @@
 # %% [markdown]
 # # 06 — Clustering, Stability, and Cross-Wave Alignment
 #
-# **Primary:**   HDBSCAN (parameter sweep, best by silhouette)
-# **Secondary:** k-medoids (k = 3–7, evaluation metrics)
-# **Soft:**      GMM with best k from k-medoids
+# **Primary:**   HDBSCAN (parameter sweep, best by silhouette; noise resolved by 1-NN)
+# **Secondary:** k-medoids (k = 3–7, diagnostic only — not used for exported labels)
+# **Soft:**      GMM with k = number of HDBSCAN clusters
 # **Stability:** Bootstrap ARI (100 iterations, 80 % resample)
 # **Alignment:** Hungarian algorithm on feature-space centroid cosine distance
 #
@@ -32,10 +32,13 @@ from sklearn.metrics import (
     silhouette_score,
 )
 from sklearn.mixture import GaussianMixture
+from sklearn.neighbors import NearestNeighbors
 try:
     from sklearn_extra.cluster import KMedoids
+    KMEDOIDS_PRECOMPUTED = False
 except ImportError:
     from kmedoids import KMedoids
+    KMEDOIDS_PRECOMPUTED = True  # kmedoids package needs a distance matrix, not raw features
 
 sys.path.insert(0, str(Path(__file__).parent))
 from config import (
@@ -59,6 +62,16 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+
+def _kmedoids_fit(X: np.ndarray, k: int, random_state: int) -> np.ndarray:
+    """Fit k-medoids, handling both sklearn_extra (raw features) and
+    kmedoids package (requires precomputed distance matrix) APIs."""
+    if KMEDOIDS_PRECOMPUTED:
+        D = cdist(X, X, metric="euclidean").astype(np.float32)
+        return KMedoids(n_clusters=k, random_state=random_state).fit_predict(D)
+    return KMedoids(n_clusters=k, random_state=random_state).fit_predict(X)
+
 
 # %% Load embeddings and feature matrices
 embeddings     = {}
@@ -97,7 +110,24 @@ for sess in SESSIONS:
     hdbscan_best[sess] = best
     log.info(f"  {label} best: {best['params']}  sil={best['sil']:.3f}")
 
-# %% k-medoids sweep
+# %% Resolve HDBSCAN noise labels → primary cluster labels (1-NN assignment)
+log.info("Resolving HDBSCAN noise labels...")
+primary_labels = {}
+for sess in SESSIONS:
+    label = SESSION_LABELS[sess]
+    raw   = hdbscan_best[sess]["labels"].copy()
+    noise = raw == -1
+    if noise.any() and (~noise).sum() >= 2:
+        X  = embeddings[sess]
+        nn = NearestNeighbors(n_neighbors=1).fit(X[~noise])
+        _, idx = nn.kneighbors(X[noise])
+        raw[noise] = raw[~noise][idx.flatten()]
+        log.info(f"  {label}: resolved {int(noise.sum())} noise points")
+    else:
+        log.info(f"  {label}: 0 noise points")
+    primary_labels[sess] = raw
+
+# %% k-medoids sweep (diagnostic — metrics only, labels not used for exports)
 log.info("k-medoids sweep...")
 kmedoids_results = {}
 
@@ -107,7 +137,7 @@ for sess in SESSIONS:
     metrics = []
 
     for k in KMEDOIDS_K_RANGE:
-        labels = KMedoids(n_clusters=k, random_state=RANDOM_STATE).fit_predict(X)
+        labels = _kmedoids_fit(X, k, RANDOM_STATE)
         metrics.append({
             "k":                  k,
             "silhouette":         silhouette_score(X, labels),
@@ -122,7 +152,7 @@ for sess in SESSIONS:
     kmedoids_results[sess] = {"metrics": metrics, "best": metrics[best_idx]}
     log.info(f"  {label} best k={kmedoids_results[sess]['best']['k']}")
 
-# %% GMM (soft assignments using best k from k-medoids)
+# %% GMM (soft assignments using k from primary HDBSCAN labels)
 log.info("Fitting GMM...")
 gmm_rows = {}
 
@@ -130,7 +160,7 @@ for sess in SESSIONS:
     label = SESSION_LABELS[sess]
     X     = embeddings[sess]
     ids   = ids_by_sess[sess]
-    k     = kmedoids_results[sess]["best"]["k"]
+    k     = len(np.unique(primary_labels[sess]))
 
     gmm   = GaussianMixture(n_components=k, random_state=RANDOM_STATE, n_init=5)
     gmm.fit(X)
@@ -152,15 +182,15 @@ log.info(f"Bootstrap stability ({N_BOOTSTRAP} iterations)...")
 for sess in SESSIONS:
     label = SESSION_LABELS[sess]
     X     = embeddings[sess]
-    k     = kmedoids_results[sess]["best"]["k"]
-    full  = kmedoids_results[sess]["best"]["labels"]
+    k     = len(np.unique(primary_labels[sess]))
+    full  = primary_labels[sess]
     n     = X.shape[0]
     rng   = np.random.default_rng(RANDOM_STATE)
     aris  = []
 
     for b in range(N_BOOTSTRAP):
         idx  = rng.choice(n, size=int(n * BOOTSTRAP_FRACTION), replace=False)
-        boot = KMedoids(n_clusters=k, random_state=int(b)).fit_predict(X[idx])
+        boot = _kmedoids_fit(X[idx], k, int(b))
         aris.append(adjusted_rand_score(full[idx], boot))
 
     log.info(f"  {label} ARI: {np.mean(aris):.3f} ± {np.std(aris):.3f}")
@@ -177,7 +207,7 @@ for sess in SESSIONS:
     label  = SESSION_LABELS[sess]
     feat   = features_by_sess[sess]
     ids    = ids_by_sess[sess]
-    lbl    = kmedoids_results[sess]["best"]["labels"]
+    lbl    = primary_labels[sess]
     z_cols = [c for c in feat.columns if c.startswith("z_")]
 
     if z_cols_ref is None:
@@ -204,6 +234,7 @@ ref_c = _centroids(features_by_sess[ref_sess], ids_by_sess[ref_sess],
                     labels_raw[ref_sess], z_cols_ref)
 labels_aligned[ref_sess] = labels_raw[ref_sess].copy()
 
+alignment_rows = []   # cross-wave centroid similarity for each matched pair
 for sess in SESSIONS[1:]:
     tgt_c = _centroids(features_by_sess[sess], ids_by_sess[sess],
                         labels_raw[sess], z_cols_ref)
@@ -213,6 +244,22 @@ for sess in SESSIONS[1:]:
     labels_aligned[sess] = np.array([remap.get(int(l), int(l))
                                       for l in labels_raw[sess]])
     log.info(f"  Alignment {SESSION_LABELS[ref_sess]}→{SESSION_LABELS[sess]}: {remap}")
+
+    # Record matched-pair cosine similarity (1 - cosine distance). High values
+    # justify pooling the aligned label across waves; low values mean the
+    # phenotype is not preserved and cross-wave cluster effects are not
+    # interpretable (see ANALYSIS_PLAN §3.4 / Supp Table 3).
+    for ref_k, tgt_k in zip(ri, ti):
+        alignment_rows.append({
+            "ref_session":     ref_sess,
+            "ref_wave":        SESSION_LABELS[ref_sess],
+            "target_session":  sess,
+            "target_wave":     SESSION_LABELS[sess],
+            "ref_cluster":     int(ref_k),
+            "target_cluster_raw":     int(tgt_k),
+            "aligned_cluster": int(ref_k),
+            "cosine_similarity": float(1.0 - cos[ref_k, tgt_k]),
+        })
 
 # %% Save outputs
 assign_rows = []
@@ -240,5 +287,9 @@ log.info(f"Saved GMM probabilities → {HANDOFF_DIR / 'gmm_probabilities.csv'}")
 pd.DataFrame(centroid_rows).to_csv(
     HANDOFF_DIR / "cluster_centroids.csv", index=False)
 log.info(f"Saved cluster centroids → {HANDOFF_DIR / 'cluster_centroids.csv'}")
+
+pd.DataFrame(alignment_rows).to_csv(
+    HANDOFF_DIR / "cluster_alignment.csv", index=False)
+log.info(f"Saved cross-wave alignment → {HANDOFF_DIR / 'cluster_alignment.csv'}")
 
 log.info("Clustering complete.")

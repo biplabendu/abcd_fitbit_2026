@@ -1,0 +1,89 @@
+2026-05-30 09:13:17,919  INFO  Loading data...
+2026-05-30 09:13:18,642  INFO    Valid-day rows: 2,269,824
+2026-05-30 09:13:19,128  INFO    1/11694
+2026-05-30 09:13:26,734  INFO    501/11694
+2026-05-30 09:13:34,290  INFO    1001/11694
+2026-05-30 09:13:42,123  INFO    1501/11694
+2026-05-30 09:13:49,855  INFO    2001/11694
+2026-05-30 09:13:57,518  INFO    2501/11694
+2026-05-30 09:14:05,355  INFO    3001/11694
+2026-05-30 09:14:13,208  INFO    3501/11694
+2026-05-30 09:14:21,257  INFO    4001/11694
+2026-05-30 09:14:29,008  INFO    4501/11694
+2026-05-30 09:14:36,782  INFO    5001/11694
+2026-05-30 09:14:44,716  INFO    5501/11694
+2026-05-30 09:14:52,505  INFO    6001/11694
+2026-05-30 09:15:00,094  INFO    6501/11694
+2026-05-30 09:15:07,679  INFO    7001/11694
+2026-05-30 09:15:15,293  INFO    7501/11694
+2026-05-30 09:15:22,965  INFO    8001/11694
+2026-05-30 09:15:30,761  INFO    8501/11694
+2026-05-30 09:15:38,651  INFO    9001/11694
+2026-05-30 09:15:46,842  INFO    9501/11694
+2026-05-30 09:15:55,035  INFO    10001/11694
+2026-05-30 09:16:02,828  INFO    10501/11694
+2026-05-30 09:16:10,598  INFO    11001/11694
+2026-05-30 09:16:18,541  INFO    11501/11694
+2026-05-30 09:16:21,704  INFO    Feature columns: 31
+2026-05-30 09:16:22,185  INFO    Saved yr2: 7,614 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr2.csv
+2026-05-30 09:16:22,412  INFO    Saved yr6: 4,080 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr6.csv
+2026-05-30 09:16:22,412  INFO  Feature extraction complete.
+2026-05-30 10:14:00,320  INFO  Loading data...
+2026-05-30 10:14:00,646  INFO    Valid-day rows: 1,041,684  (activity=['steps_total', 'mets'], sleep=['min_slp'])
+2026-05-30 10:14:00,847  INFO    1/5652
+2026-05-30 10:14:09,387  INFO    501/5652
+2026-05-30 10:14:18,227  INFO    1001/5652
+2026-05-30 10:14:27,322  INFO    1501/5652
+2026-05-30 10:14:36,590  INFO    2001/5652
+2026-05-30 10:14:45,599  INFO    2501/5652
+2026-05-30 10:14:54,460  INFO    3001/5652
+2026-05-30 10:15:03,110  INFO    3501/5652
+2026-05-30 10:15:11,746  INFO    4001/5652
+2026-05-30 10:15:20,804  INFO    4501/5652
+2026-05-30 10:15:29,994  INFO    5001/5652
+2026-05-30 10:15:38,883  INFO    5501/5652
+2026-05-30 10:15:41,561  INFO    Feature columns: 39
+2026-05-30 10:15:41,818  INFO    Saved yr2: 2,892 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr2.csv
+2026-05-30 10:15:42,000  INFO    Saved yr6: 2,760 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr6.csv
+2026-05-30 10:15:42,000  INFO  Feature extraction complete.
+2026-05-30 10:54:09,145  INFO  Loading data...
+2026-05-30 10:54:09,463  INFO    Valid-day rows: 1,041,684  (activity=['steps_total', 'mets'], sleep=['min_slp'])
+2026-05-30 10:54:09,661  INFO    1/5652
+2026-05-30 10:54:18,590  INFO    501/5652
+2026-05-30 10:54:27,393  INFO    1001/5652
+2026-05-30 10:54:36,490  INFO    1501/5652
+2026-05-30 10:54:45,640  INFO    2001/5652
+2026-05-30 10:54:54,595  INFO    2501/5652
+2026-05-30 10:55:03,776  INFO    3001/5652
+2026-05-30 10:55:12,836  INFO    3501/5652
+2026-05-30 10:55:21,823  INFO    4001/5652
+2026-05-30 10:55:30,958  INFO    4501/5652
+2026-05-30 10:55:40,061  INFO    5001/5652
+2026-05-30 10:55:49,416  INFO    5501/5652
+2026-05-30 10:55:52,339  INFO    Feature columns: 39
+2026-05-30 10:55:52,596  INFO    Saved yr2: 2,892 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr2.csv
+2026-05-30 10:55:52,776  INFO    Saved yr6: 2,760 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr6.csv
+2026-05-30 10:55:53,336  INFO    Saved diurnal profiles: 203,472 rows → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/diurnal_profiles.csv
+2026-05-30 10:55:53,336  INFO  Feature extraction complete.
+2026-05-31 10:43:55,681  INFO  Loading data...
+2026-05-31 10:43:56,014  INFO    Valid-day rows: 1,041,684  (activity=['steps_total', 'mets'], sleep=['min_slp'])
+2026-05-31 10:43:56,219  INFO    1/5652
+2026-05-31 10:54:34,671  INFO  Loading data...
+2026-05-31 10:54:35,002  INFO    Valid-day rows: 1,041,684  (activity=['steps_total', 'mets'], sleep=['min_slp'])
+2026-05-31 10:54:35,215  INFO    1/5652
+2026-05-31 10:54:44,834  INFO    501/5652
+2026-05-31 10:54:54,470  INFO    1001/5652
+2026-05-31 10:55:04,302  INFO    1501/5652
+2026-05-31 10:55:14,193  INFO    2001/5652
+2026-05-31 10:55:23,786  INFO    2501/5652
+2026-05-31 10:55:33,562  INFO    3001/5652
+2026-05-31 10:55:43,318  INFO    3501/5652
+2026-05-31 10:55:52,952  INFO    4001/5652
+2026-05-31 10:56:02,844  INFO    4501/5652
+2026-05-31 10:56:12,562  INFO    5001/5652
+2026-05-31 10:56:22,356  INFO    5501/5652
+2026-05-31 10:56:25,277  INFO    Feature columns: 39
+2026-05-31 10:56:25,534  INFO    Saved yr2: 2,892 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr2.csv
+2026-05-31 10:56:25,715  INFO    Saved yr6: 2,760 participants → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/features_yr6.csv
+2026-05-31 10:56:26,270  INFO    Saved diurnal profiles: 203,472 rows → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/diurnal_profiles.csv
+2026-05-31 10:56:26,270  INFO  Feature extraction complete.

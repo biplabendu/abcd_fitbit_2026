@@ -46,7 +46,7 @@ def fit_cosinor(
 
     M, beta, gamma = coeffs
     amplitude = float(np.sqrt(beta**2 + gamma**2))
-    acrophase_rad = np.arctan2(-gamma, beta)
+    acrophase_rad = np.arctan2(gamma, beta)   # φ = atan2(γ,β) for model y=M+β·cos+γ·sin
     acrophase_hours = float(acrophase_rad * period / (2 * np.pi) % period)
 
     return float(M), amplitude, acrophase_hours

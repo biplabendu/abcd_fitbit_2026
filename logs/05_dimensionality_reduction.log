@@ -1,0 +1,40 @@
+2026-05-30 09:17:10,729  INFO    Loaded yr2: 7,614 rows
+2026-05-30 09:17:10,767  INFO    Loaded yr6: 4,080 rows
+2026-05-30 09:17:10,769  INFO    Z-scored features: 31
+2026-05-30 09:17:10,776  WARNING    yr2: dropping 1586 rows with NaN features
+2026-05-30 09:17:10,780  INFO    yr2: PCA 31→17 components (95.7% variance)
+2026-05-30 09:17:44,884  INFO    yr2: UMAP done
+2026-05-30 09:17:51,043  WARNING    yr6: dropping 1582 rows with NaN features
+2026-05-30 09:17:51,045  INFO    yr6: PCA 31→18 components (95.9% variance)
+2026-05-30 09:18:11,178  INFO    yr6: UMAP done
+2026-05-30 09:18:11,221  INFO  Saved UMAP coords → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/umap_coords.csv
+2026-05-30 10:15:48,075  INFO    Loaded yr2: 2,892 rows
+2026-05-30 10:15:48,103  INFO    Loaded yr6: 2,760 rows
+2026-05-30 10:15:48,105  INFO    Z-scored features: 39
+2026-05-30 10:15:48,110  WARNING    yr2: dropping 515 rows with NaN features
+2026-05-30 10:15:48,113  INFO    yr2: PCA 39→20 components (95.7% variance)
+2026-05-30 10:16:09,573  INFO    yr2: UMAP done
+2026-05-30 10:16:09,590  WARNING    yr6: dropping 1243 rows with NaN features
+2026-05-30 10:16:09,592  INFO    yr6: PCA 39→20 components (95.4% variance)
+2026-05-30 10:16:18,314  INFO    yr6: UMAP done
+2026-05-30 10:16:18,334  INFO  Saved UMAP coords → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/umap_coords.csv
+2026-05-30 10:55:59,101  INFO    Loaded yr2: 2,892 rows
+2026-05-30 10:55:59,131  INFO    Loaded yr6: 2,760 rows
+2026-05-30 10:55:59,133  INFO    Z-scored features: 39
+2026-05-30 10:55:59,138  WARNING    yr2: dropping 515 rows with NaN features
+2026-05-30 10:55:59,141  INFO    yr2: PCA 39→20 components (95.7% variance)
+2026-05-30 10:56:20,783  INFO    yr2: UMAP done
+2026-05-30 10:56:20,801  WARNING    yr6: dropping 1243 rows with NaN features
+2026-05-30 10:56:20,803  INFO    yr6: PCA 39→20 components (95.4% variance)
+2026-05-30 10:56:29,630  INFO    yr6: UMAP done
+2026-05-30 10:56:29,656  INFO  Saved UMAP coords → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/umap_coords.csv
+2026-05-31 10:56:32,690  INFO    Loaded yr2: 2,892 rows
+2026-05-31 10:56:32,719  INFO    Loaded yr6: 2,760 rows
+2026-05-31 10:56:32,720  INFO    Z-scored features: 39
+2026-05-31 10:56:32,725  WARNING    yr2: dropping 515 rows with NaN features
+2026-05-31 10:56:32,729  INFO    yr2: PCA 39→20 components (95.5% variance)
+2026-05-31 10:56:53,858  INFO    yr2: UMAP done
+2026-05-31 10:56:53,875  WARNING    yr6: dropping 1244 rows with NaN features
+2026-05-31 10:56:53,877  INFO    yr6: PCA 39→20 components (95.3% variance)
+2026-05-31 10:57:02,593  INFO    yr6: UMAP done
+2026-05-31 10:57:02,616  INFO  Saved UMAP coords → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/umap_coords.csv

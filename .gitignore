@@ -15,3 +15,6 @@
 # Exclude raw data, outputs, and dev scratchpads from version control
 dev/
 ANALYSIS_PLAN.md
+data/handoff/
+data/processed/
+_targets/meta/meta

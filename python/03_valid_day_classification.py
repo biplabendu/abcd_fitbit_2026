@@ -1,9 +1,12 @@
 # %% [markdown]
 # # 03 — Day Validity Classification
 #
+# A slot is "present" (device worn) when the validity signal (default
+# `min_total` = recorded minutes) exceeds `VALIDITY_MIN_VALUE`.
+#
 # A day is **valid** when:
-# - ≥ 8 of 12 two-hour slots have non-NaN HR data, **and**
-# - ≥ 1 slot falls in the 10 pm – 6 am window (required for sleep features).
+# - ≥ `MIN_PRESENT_SLOTS_PER_DAY` of 12 slots are present, **and**
+# - ≥ 1 present slot falls in the 10 pm – 6 am window (for sleep features).
 #
 # **Input:**  `data/processed/imputed/imputed_data.parquet`
 # **Output:** `data/processed/day_validity.parquet`
@@ -21,8 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     IMPUTED_PARQUET, DAY_VALIDITY_PARQUET, HANDOFF_DIR, LOGS_DIR,
     SESSION_LABELS,
-    COL_ID, COL_SESSION, COL_DAY, COL_WKND, COL_HR,
-    NIGHTTIME_HOURS, MIN_HR_SLOTS_PER_DAY,
+    COL_ID, COL_SESSION, COL_DAY, COL_WKND,
+    VALIDITY_SIGNAL, VALIDITY_MIN_VALUE,
+    NIGHTTIME_HOURS, MIN_PRESENT_SLOTS_PER_DAY,
     MIN_VALID_DAYS, MIN_VALID_WEEKDAYS, MIN_VALID_WEEKEND_DAYS,
 )
 
@@ -44,16 +48,19 @@ log = logging.getLogger(__name__)
 log.info(f"Loading {IMPUTED_PARQUET}")
 df = pd.read_parquet(IMPUTED_PARQUET)
 log.info(f"  Input rows: {len(df):,}")
-assert COL_HR in df.columns
+assert VALIDITY_SIGNAL in df.columns, f"Validity signal '{VALIDITY_SIGNAL}' not in data"
+
+# A slot is "present" when the wear signal exceeds the threshold
+df["_present"] = df[VALIDITY_SIGNAL] > VALIDITY_MIN_VALUE
 
 # %% Classify each (participant × session × day)
 day_stats = (
     df.groupby([COL_ID, COL_SESSION, COL_DAY, COL_WKND])
     .apply(
         lambda g: pd.Series({
-            "n_hr_slots":    int(g[COL_HR].notna().sum()),
-            "has_nighttime": bool(
-                g.loc[g["start_hour"].isin(NIGHTTIME_HOURS), COL_HR].notna().any()
+            "n_present_slots": int(g["_present"].sum()),
+            "has_nighttime":   bool(
+                g.loc[g["start_hour"].isin(NIGHTTIME_HOURS), "_present"].any()
             ),
         })
     )
@@ -61,12 +68,13 @@ day_stats = (
 )
 
 day_stats["is_valid"] = (
-    (day_stats["n_hr_slots"] >= MIN_HR_SLOTS_PER_DAY) &
+    (day_stats["n_present_slots"] >= MIN_PRESENT_SLOTS_PER_DAY) &
     day_stats["has_nighttime"]
 )
 
 n_valid = day_stats["is_valid"].sum()
 n_total = len(day_stats)
+log.info(f"  Validity signal: {VALIDITY_SIGNAL} > {VALIDITY_MIN_VALUE}")
 log.info(f"  Valid days: {n_valid:,} / {n_total:,} ({n_valid / n_total:.1%})")
 
 # %% Aggregate per participant × session
@@ -95,17 +103,18 @@ wave_quality = (
 )
 
 # %% Apply exclusion flags
-wave_quality["exclude_clustering"]      = wave_quality["n_valid_days"] < MIN_VALID_DAYS
-wave_quality["exclude_weekday_features"]= wave_quality["n_valid_weekdays"] < MIN_VALID_WEEKDAYS
-wave_quality["exclude_weekend_features"]= wave_quality["n_valid_weekend_days"] < MIN_VALID_WEEKEND_DAYS
-wave_quality["wave_label"]              = wave_quality[COL_SESSION].map(SESSION_LABELS)
+wave_quality["exclude_clustering"]       = wave_quality["n_valid_days"] < MIN_VALID_DAYS
+wave_quality["exclude_weekday_features"] = wave_quality["n_valid_weekdays"] < MIN_VALID_WEEKDAYS
+wave_quality["exclude_weekend_features"] = wave_quality["n_valid_weekend_days"] < MIN_VALID_WEEKEND_DAYS
+wave_quality["wave_label"]               = wave_quality[COL_SESSION].map(SESSION_LABELS)
 
 log.info(f"  Excluded from clustering:       {wave_quality['exclude_clustering'].sum()}")
 log.info(f"  Excluded from weekday features: {wave_quality['exclude_weekday_features'].sum()}")
 log.info(f"  Excluded from weekend features: {wave_quality['exclude_weekend_features'].sum()}")
 
 # %% Save
-day_stats.to_parquet(DAY_VALIDITY_PARQUET, index=False)
+day_stats.drop(columns=["_present"], errors="ignore").to_parquet(
+    DAY_VALIDITY_PARQUET, index=False)
 log.info(f"Saved day validity → {DAY_VALIDITY_PARQUET}")
 
 wave_quality.to_csv(HANDOFF_DIR / "wear_quality.csv", index=False)

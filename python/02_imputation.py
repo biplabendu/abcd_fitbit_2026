@@ -3,6 +3,8 @@
 #
 # Imputes gaps of ≤ 3 consecutive missing 2-hr slots using the
 # same-time-of-day median from ± 3 calendar days (≥ 3 neighbours required).
+# Runs on every signal in `config.SIGNALS`. The validity signal (e.g. min_total)
+# is carried through untouched — it is a wear indicator, not imputed.
 #
 # **Input:**  `data/processed/clean/clean_data.parquet`
 # **Output:** `data/processed/imputed/imputed_data.parquet`
@@ -18,8 +20,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     CLEAN_PARQUET, IMPUTED_PARQUET, LOGS_DIR,
+    SIGNAL_NAMES, VALIDITY_SIGNAL,
     COL_ID, COL_SESSION, COL_DAY, COL_WKND,
-    COL_HR, COL_SLEEP, COL_STEPS,
     ALL_SLOT_HOURS,
     MAX_IMPUTE_GAP, MIN_NEIGHBOR_COUNT, NEIGHBOR_WINDOW_DAYS,
 )
@@ -37,21 +39,22 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-SIGNALS = [COL_HR, COL_SLEEP, COL_STEPS]
+# Columns carried through but not imputed (wear / validity indicators)
+PASSTHROUGH = [VALIDITY_SIGNAL] if VALIDITY_SIGNAL not in SIGNAL_NAMES else []
 
 # %% Load clean data
 log.info(f"Loading {CLEAN_PARQUET}")
 df = pd.read_parquet(CLEAN_PARQUET)
-log.info(f"  Input rows: {len(df):,}")
+log.info(f"  Input rows: {len(df):,}  signals={SIGNAL_NAMES}")
 
-for col in SIGNALS:
+for col in SIGNAL_NAMES:
     assert col in df.columns, f"Missing column: {col}"
 
 df["start_hour"] = df["start_hour"].astype(int)
 
 # %% Build complete time grid
 # For every (participant, session, day) observed, ensure all 12 slots exist.
-# Slots absent from the source data are treated as NaN.
+# Slots absent from the source data are treated as NaN (and remain non-present).
 
 day_index = df[[COL_ID, COL_SESSION, COL_DAY, COL_WKND]].drop_duplicates()
 
@@ -64,8 +67,9 @@ grid = pd.DataFrame(
     ]
 )
 
+value_cols = SIGNAL_NAMES + PASSTHROUGH
 merged = grid.merge(
-    df[[COL_ID, COL_SESSION, COL_DAY, "start_hour"] + SIGNALS],
+    df[[COL_ID, COL_SESSION, COL_DAY, "start_hour"] + value_cols],
     on=[COL_ID, COL_SESSION, COL_DAY, "start_hour"],
     how="left",
 )
@@ -93,14 +97,13 @@ def _imputable_mask(nan_mask: np.ndarray, max_gap: int) -> np.ndarray:
 
 
 def _impute_group(group: pd.DataFrame) -> pd.DataFrame:
-    """Impute all signals for one (participant, session) group."""
+    """Impute all configured signals for one (participant, session) group."""
     group = group.sort_values([COL_DAY, "start_hour"]).copy()
 
     sorted_days = sorted(group[COL_DAY].unique())
     n_days = len(sorted_days)
-    day_pos = {d: i for i, d in enumerate(sorted_days)}
 
-    for signal in SIGNALS:
+    for signal in SIGNAL_NAMES:
         pivot = (
             group.pivot(index=COL_DAY, columns="start_hour", values=signal)
             .reindex(index=sorted_days, columns=ALL_SLOT_HOURS)
@@ -125,11 +128,13 @@ def _impute_group(group: pd.DataFrame) -> pd.DataFrame:
                 if len(neighbours) >= MIN_NEIGHBOR_COUNT:
                     arr[di, si] = float(np.median(neighbours))
 
-        # Write imputed values back
-        for di, day in enumerate(sorted_days):
-            for si, hour in enumerate(ALL_SLOT_HOURS):
-                mask = (group[COL_DAY] == day) & (group["start_hour"] == hour)
-                group.loc[mask, signal] = arr[di, si]
+        # Write imputed values back (vectorized via MultiIndex)
+        idx = pd.MultiIndex.from_product(
+            [sorted_days, ALL_SLOT_HOURS], names=[COL_DAY, "start_hour"]
+        )
+        group = group.set_index([COL_DAY, "start_hour"])
+        group[signal] = pd.Series(arr.flatten(), index=idx)
+        group = group.reset_index()
 
     return group
 
@@ -148,7 +153,7 @@ for i, ((pid, sess), grp) in enumerate(groups):
 imputed = pd.concat(parts, ignore_index=True)
 
 # %% Report imputed counts
-for signal in SIGNALS:
+for signal in SIGNAL_NAMES:
     n_imputed = imputed[signal].notna().sum() - merged[signal].notna().sum()
     log.info(f"  {signal}: {n_imputed:,} slots imputed")
 

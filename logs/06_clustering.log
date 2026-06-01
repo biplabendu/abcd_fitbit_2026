@@ -1,0 +1,191 @@
+2026-05-30 09:18:19,567  INFO    yr2: 6028 participants, 10 UMAP dims
+2026-05-30 09:18:19,593  INFO    yr6: 2498 participants, 10 UMAP dims
+2026-05-30 09:18:19,593  INFO  HDBSCAN sweep...
+2026-05-30 09:18:20,044  INFO    yr2 mcs=50 ms=10: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:20,468  INFO    yr2 mcs=50 ms=20: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:20,895  INFO    yr2 mcs=75 ms=10: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:21,322  INFO    yr2 mcs=75 ms=20: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:21,765  INFO    yr2 mcs=100 ms=10: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:22,187  INFO    yr2 mcs=100 ms=20: k=2 noise=0.0% sil=0.688
+2026-05-30 09:18:22,187  INFO    yr2 best: (50, 10)  sil=0.688
+2026-05-30 09:18:22,286  INFO    yr6 mcs=50 ms=10: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,384  INFO    yr6 mcs=50 ms=20: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,490  INFO    yr6 mcs=75 ms=10: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,590  INFO    yr6 mcs=75 ms=20: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,695  INFO    yr6 mcs=100 ms=10: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,794  INFO    yr6 mcs=100 ms=20: k=2 noise=0.0% sil=0.349
+2026-05-30 09:18:22,794  INFO    yr6 best: (50, 10)  sil=0.349
+2026-05-30 09:18:22,794  INFO  k-medoids sweep...
+2026-05-30 10:16:21,569  INFO    yr2: 2377 participants, 10 UMAP dims
+2026-05-30 10:16:21,598  INFO    yr6: 1517 participants, 10 UMAP dims
+2026-05-30 10:16:21,598  INFO  HDBSCAN sweep...
+2026-05-30 10:16:21,738  INFO    yr2 mcs=50 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:21,874  INFO    yr2 mcs=50 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:21,998  INFO    yr2 mcs=75 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:22,135  INFO    yr2 mcs=75 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:22,265  INFO    yr2 mcs=100 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:22,398  INFO    yr2 mcs=100 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:16:22,398  INFO    yr2 best: (50, 10)  sil=0.713
+2026-05-30 10:16:22,460  INFO    yr6 mcs=50 ms=10: k=2 noise=0.0% sil=0.374
+2026-05-30 10:16:22,522  INFO    yr6 mcs=50 ms=20: k=2 noise=0.0% sil=0.374
+2026-05-30 10:16:22,570  INFO    yr6 mcs=75 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 10:16:22,623  INFO    yr6 mcs=75 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 10:16:22,673  INFO    yr6 mcs=100 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 10:16:22,727  INFO    yr6 mcs=100 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 10:16:22,727  INFO    yr6 best: (75, 20)  sil=0.572
+2026-05-30 10:16:22,727  INFO  k-medoids sweep...
+2026-05-30 10:16:22,984  INFO    yr2 k=3: sil=0.482 db=0.663
+2026-05-30 10:16:23,208  INFO    yr2 k=4: sil=0.447 db=0.733
+2026-05-30 10:16:23,440  INFO    yr2 k=5: sil=0.436 db=0.736
+2026-05-30 10:16:23,668  INFO    yr2 k=6: sil=0.398 db=0.806
+2026-05-30 10:16:23,913  INFO    yr2 k=7: sil=0.333 db=0.979
+2026-05-30 10:16:23,913  INFO    yr2 best k=3
+2026-05-30 10:16:24,039  INFO    yr6 k=3: sil=0.423 db=0.914
+2026-05-30 10:16:24,210  INFO    yr6 k=4: sil=0.417 db=0.863
+2026-05-30 10:16:24,385  INFO    yr6 k=5: sil=0.426 db=0.755
+2026-05-30 10:16:24,521  INFO    yr6 k=6: sil=0.385 db=0.874
+2026-05-30 10:16:24,766  INFO    yr6 k=7: sil=0.348 db=0.890
+2026-05-30 10:16:24,766  INFO    yr6 best k=5
+2026-05-30 10:16:24,766  INFO  Fitting GMM...
+2026-05-30 10:16:24,896  INFO    yr2 GMM k=3 done
+2026-05-30 10:16:24,992  INFO    yr6 GMM k=5 done
+2026-05-30 10:16:24,992  INFO  Bootstrap stability (100 iterations)...
+2026-05-30 10:16:36,664  INFO    yr2 ARI: 0.958 ± 0.052
+2026-05-30 10:16:45,370  INFO    yr6 ARI: 0.938 ± 0.076
+2026-05-30 10:16:45,370  INFO  Cross-wave alignment...
+2026-05-30 10:16:45,387  INFO    Alignment yr2→yr6: {4: 0, 3: 1, 2: 2}
+2026-05-30 10:16:45,404  INFO  Saved cluster assignments → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_assignments.csv
+2026-05-30 10:16:45,422  INFO  Saved GMM probabilities → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/gmm_probabilities.csv
+2026-05-30 10:16:45,424  INFO  Saved cluster centroids → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_centroids.csv
+2026-05-30 10:16:45,424  INFO  Clustering complete.
+2026-05-30 10:56:33,089  INFO    yr2: 2377 participants, 10 UMAP dims
+2026-05-30 10:56:33,118  INFO    yr6: 1517 participants, 10 UMAP dims
+2026-05-30 10:56:33,118  INFO  HDBSCAN sweep...
+2026-05-30 10:56:33,252  INFO    yr2 mcs=50 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,378  INFO    yr2 mcs=50 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,502  INFO    yr2 mcs=75 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,634  INFO    yr2 mcs=75 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,761  INFO    yr2 mcs=100 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,897  INFO    yr2 mcs=100 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 10:56:33,897  INFO    yr2 best: (50, 10)  sil=0.713
+2026-05-30 10:56:33,964  INFO    yr6 mcs=50 ms=10: k=2 noise=0.0% sil=0.374
+2026-05-30 10:56:34,026  INFO    yr6 mcs=50 ms=20: k=2 noise=0.0% sil=0.374
+2026-05-30 10:56:34,074  INFO    yr6 mcs=75 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 10:56:34,126  INFO    yr6 mcs=75 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 10:56:34,173  INFO    yr6 mcs=100 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 10:56:34,225  INFO    yr6 mcs=100 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 10:56:34,225  INFO    yr6 best: (75, 20)  sil=0.572
+2026-05-30 10:56:34,225  INFO  k-medoids sweep...
+2026-05-30 10:56:34,472  INFO    yr2 k=3: sil=0.482 db=0.663
+2026-05-30 10:56:34,687  INFO    yr2 k=4: sil=0.447 db=0.733
+2026-05-30 10:56:34,919  INFO    yr2 k=5: sil=0.436 db=0.736
+2026-05-30 10:56:35,144  INFO    yr2 k=6: sil=0.398 db=0.806
+2026-05-30 10:56:35,392  INFO    yr2 k=7: sil=0.333 db=0.979
+2026-05-30 10:56:35,392  INFO    yr2 best k=3
+2026-05-30 10:56:35,518  INFO    yr6 k=3: sil=0.423 db=0.914
+2026-05-30 10:56:35,690  INFO    yr6 k=4: sil=0.417 db=0.863
+2026-05-30 10:56:35,867  INFO    yr6 k=5: sil=0.426 db=0.755
+2026-05-30 10:56:36,003  INFO    yr6 k=6: sil=0.385 db=0.874
+2026-05-30 10:56:36,246  INFO    yr6 k=7: sil=0.348 db=0.890
+2026-05-30 10:56:36,246  INFO    yr6 best k=5
+2026-05-30 10:56:36,246  INFO  Fitting GMM...
+2026-05-30 10:56:36,363  INFO    yr2 GMM k=3 done
+2026-05-30 10:56:36,469  INFO    yr6 GMM k=5 done
+2026-05-30 10:56:36,469  INFO  Bootstrap stability (100 iterations)...
+2026-05-30 10:56:48,076  INFO    yr2 ARI: 0.958 ± 0.052
+2026-05-30 10:56:56,554  INFO    yr6 ARI: 0.938 ± 0.076
+2026-05-30 10:56:56,554  INFO  Cross-wave alignment...
+2026-05-30 10:56:56,571  INFO    Alignment yr2→yr6: {4: 0, 3: 1, 2: 2}
+2026-05-30 10:56:56,584  INFO  Saved cluster assignments → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_assignments.csv
+2026-05-30 10:56:56,602  INFO  Saved GMM probabilities → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/gmm_probabilities.csv
+2026-05-30 10:56:56,603  INFO  Saved cluster centroids → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_centroids.csv
+2026-05-30 10:56:56,603  INFO  Clustering complete.
+2026-05-30 22:18:34,748  INFO    yr2: 2377 participants, 10 UMAP dims
+2026-05-30 22:18:34,782  INFO    yr6: 1517 participants, 10 UMAP dims
+2026-05-30 22:18:34,782  INFO  HDBSCAN sweep...
+2026-05-30 22:18:34,917  INFO    yr2 mcs=50 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,045  INFO    yr2 mcs=50 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,167  INFO    yr2 mcs=75 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,291  INFO    yr2 mcs=75 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,410  INFO    yr2 mcs=100 ms=10: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,537  INFO    yr2 mcs=100 ms=20: k=2 noise=0.0% sil=0.713
+2026-05-30 22:18:35,537  INFO    yr2 best: (50, 10)  sil=0.713
+2026-05-30 22:18:35,597  INFO    yr6 mcs=50 ms=10: k=2 noise=0.0% sil=0.374
+2026-05-30 22:18:35,656  INFO    yr6 mcs=50 ms=20: k=2 noise=0.0% sil=0.374
+2026-05-30 22:18:35,703  INFO    yr6 mcs=75 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 22:18:35,753  INFO    yr6 mcs=75 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 22:18:35,800  INFO    yr6 mcs=100 ms=10: k=2 noise=24.3% sil=0.569
+2026-05-30 22:18:35,851  INFO    yr6 mcs=100 ms=20: k=2 noise=14.0% sil=0.572
+2026-05-30 22:18:35,851  INFO    yr6 best: (75, 20)  sil=0.572
+2026-05-30 22:18:35,851  INFO  k-medoids sweep...
+2026-05-30 22:18:36,083  INFO    yr2 k=3: sil=0.482 db=0.663
+2026-05-30 22:18:36,292  INFO    yr2 k=4: sil=0.447 db=0.733
+2026-05-30 22:18:36,515  INFO    yr2 k=5: sil=0.436 db=0.736
+2026-05-30 22:18:36,726  INFO    yr2 k=6: sil=0.398 db=0.806
+2026-05-30 22:18:36,960  INFO    yr2 k=7: sil=0.333 db=0.979
+2026-05-30 22:18:36,960  INFO    yr2 best k=3
+2026-05-30 22:18:37,083  INFO    yr6 k=3: sil=0.423 db=0.914
+2026-05-30 22:18:37,258  INFO    yr6 k=4: sil=0.417 db=0.863
+2026-05-30 22:18:37,429  INFO    yr6 k=5: sil=0.426 db=0.755
+2026-05-30 22:18:37,566  INFO    yr6 k=6: sil=0.385 db=0.874
+2026-05-30 22:18:37,821  INFO    yr6 k=7: sil=0.348 db=0.890
+2026-05-30 22:18:37,821  INFO    yr6 best k=5
+2026-05-30 22:18:37,821  INFO  Fitting GMM...
+2026-05-30 22:18:37,934  INFO    yr2 GMM k=3 done
+2026-05-30 22:18:38,027  INFO    yr6 GMM k=5 done
+2026-05-30 22:18:38,027  INFO  Bootstrap stability (100 iterations)...
+2026-05-30 22:18:49,636  INFO    yr2 ARI: 0.958 ± 0.052
+2026-05-30 22:18:58,291  INFO    yr6 ARI: 0.938 ± 0.076
+2026-05-30 22:18:58,291  INFO  Cross-wave alignment...
+2026-05-30 22:18:58,309  INFO    Alignment yr2→yr6: {4: 0, 3: 1, 2: 2}
+2026-05-30 22:18:58,323  INFO  Saved cluster assignments → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_assignments.csv
+2026-05-30 22:18:58,341  INFO  Saved GMM probabilities → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/gmm_probabilities.csv
+2026-05-30 22:18:58,342  INFO  Saved cluster centroids → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_centroids.csv
+2026-05-30 22:18:58,343  INFO  Saved cross-wave alignment → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_alignment.csv
+2026-05-30 22:18:58,343  INFO  Clustering complete.
+2026-05-31 10:57:06,143  INFO    yr2: 2377 participants, 10 UMAP dims
+2026-05-31 10:57:06,177  INFO    yr6: 1516 participants, 10 UMAP dims
+2026-05-31 10:57:06,177  INFO  HDBSCAN sweep...
+2026-05-31 10:57:06,315  INFO    yr2 mcs=50 ms=10: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,446  INFO    yr2 mcs=50 ms=20: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,572  INFO    yr2 mcs=75 ms=10: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,699  INFO    yr2 mcs=75 ms=20: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,826  INFO    yr2 mcs=100 ms=10: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,963  INFO    yr2 mcs=100 ms=20: k=3 noise=0.0% sil=0.729
+2026-05-31 10:57:06,963  INFO    yr2 best: (50, 10)  sil=0.729
+2026-05-31 10:57:07,025  INFO    yr6 mcs=50 ms=10: k=2 noise=0.0% sil=0.468
+2026-05-31 10:57:07,084  INFO    yr6 mcs=50 ms=20: k=2 noise=0.0% sil=0.468
+2026-05-31 10:57:07,142  INFO    yr6 mcs=75 ms=10: k=2 noise=4.1% sil=0.477
+2026-05-31 10:57:07,201  INFO    yr6 mcs=75 ms=20: k=2 noise=5.1% sil=0.478
+2026-05-31 10:57:07,258  INFO    yr6 mcs=100 ms=10: k=2 noise=4.1% sil=0.477
+2026-05-31 10:57:07,316  INFO    yr6 mcs=100 ms=20: k=2 noise=5.1% sil=0.478
+2026-05-31 10:57:07,316  INFO    yr6 best: (75, 20)  sil=0.478
+2026-05-31 10:57:07,316  INFO  Resolving HDBSCAN noise labels...
+2026-05-31 10:57:07,316  INFO    yr2: 0 noise points
+2026-05-31 10:57:07,317  INFO    yr6: resolved 78 noise points
+2026-05-31 10:57:07,317  INFO  k-medoids sweep...
+2026-05-31 10:57:07,568  INFO    yr2 k=3: sil=0.326 db=0.928
+2026-05-31 10:57:07,794  INFO    yr2 k=4: sil=0.408 db=0.674
+2026-05-31 10:57:08,027  INFO    yr2 k=5: sil=0.396 db=0.733
+2026-05-31 10:57:08,245  INFO    yr2 k=6: sil=0.339 db=0.888
+2026-05-31 10:57:08,498  INFO    yr2 k=7: sil=0.359 db=0.846
+2026-05-31 10:57:08,498  INFO    yr2 best k=4
+2026-05-31 10:57:08,621  INFO    yr6 k=3: sil=0.436 db=0.841
+2026-05-31 10:57:08,736  INFO    yr6 k=4: sil=0.357 db=1.038
+2026-05-31 10:57:08,856  INFO    yr6 k=5: sil=0.389 db=0.886
+2026-05-31 10:57:08,979  INFO    yr6 k=6: sil=0.366 db=0.984
+2026-05-31 10:57:09,099  INFO    yr6 k=7: sil=0.358 db=1.002
+2026-05-31 10:57:09,099  INFO    yr6 best k=3
+2026-05-31 10:57:09,099  INFO  Fitting GMM...
+2026-05-31 10:57:09,230  INFO    yr2 GMM k=3 done
+2026-05-31 10:57:09,277  INFO    yr6 GMM k=2 done
+2026-05-31 10:57:09,277  INFO  Bootstrap stability (100 iterations)...
+2026-05-31 10:57:21,150  INFO    yr2 ARI: 0.333 ± 0.315
+2026-05-31 10:57:28,506  INFO    yr6 ARI: 0.309 ± 0.406
+2026-05-31 10:57:28,506  INFO  Cross-wave alignment...
+2026-05-31 10:57:28,522  INFO    Alignment yr2→yr6: {0: 1, 1: 2}
+2026-05-31 10:57:28,534  INFO  Saved cluster assignments → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_assignments.csv
+2026-05-31 10:57:28,548  INFO  Saved GMM probabilities → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/gmm_probabilities.csv
+2026-05-31 10:57:28,549  INFO  Saved cluster centroids → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_centroids.csv
+2026-05-31 10:57:28,551  INFO  Saved cross-wave alignment → /Users/bidas/Documents/GitHub/abcd_fitbit_2026/data/handoff/cluster_alignment.csv
+2026-05-31 10:57:28,551  INFO  Clustering complete.
